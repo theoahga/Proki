@@ -33,7 +33,16 @@ void ProcessUpdater::set_update_interval(float seconds) {
 
 void ProcessUpdater::update_loop() {
     while (running) {
-        auto updated_process_list = std::make_shared<std::vector<ProcessInfo>>(ProcessService::list_all_processes());
+        auto processes = ProcessService::list_all_processes();
+
+        std::sort(processes.begin(), processes.end(), [](const ProcessInfo& a, const ProcessInfo& b) {
+            float score_a = a.cpu_usage * 0.7f + a.memory_percent * 0.3f;
+            float score_b = b.cpu_usage * 0.7f + b.memory_percent * 0.3f;
+            return score_a > score_b;
+        });
+
+        auto updated_process_list = std::make_shared<std::vector<ProcessInfo>>(processes);
+
         std::atomic_store(shared_ptr_var, updated_process_list);
 
         counter++;

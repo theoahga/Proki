@@ -22,7 +22,7 @@ void ProcessUI::render() {
     }
 
     if (ImGui::BeginChild("process_monitor")) {
-        if (ImGui::BeginTable("ProcessTable", 6,
+        if (ImGui::BeginTable("ProcessTable", 7,
                               ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable |
                               ImGuiTableFlags_ScrollY)) {
             ImGui::TableSetupColumn("PID");
@@ -31,6 +31,7 @@ void ProcessUI::render() {
             ImGui::TableSetupColumn("Memory (MB)");
             ImGui::TableSetupColumn("CPU (%)");
             ImGui::TableSetupColumn("Threads");
+            ImGui::TableSetupColumn("Command");
             ImGui::TableHeadersRow();
 
 
@@ -54,6 +55,9 @@ void ProcessUI::render() {
 
                 ImGui::TableSetColumnIndex(5);
                 ImGui::Text("%d", process_info.thread_count);
+
+                ImGui::TableSetColumnIndex(6);
+                ImGui::TextUnformatted(process_info.cmdline.c_str());
             }
 
             ImGui::EndTable();
