@@ -1,17 +1,21 @@
 #pragma once
+
 #include <string>
+#include <vector>
 
 struct ProcessInfo {
-    int pid;                    // Process ID
-    int ppid;                   // Parent Process ID
-    std::string name;           // Process name or executable
-    std::string cmdline;        // Full command line
-    std::string user;           // User/owner of the process
-    std::string state;          // Running/Sleeping/etc. if available
+    int pid;
+    std::string name;
+    std::string user;
+    std::string state;
+    std::string command;
+    float cpu_usage = 0.0f;
+    float memory_usage = 0.0f;
+    float memory_percent = 0.0f;
+    int thread_count = 0;
 
-    float cpu_usage;            // CPU usage in percent
-    float memory_usage;         // Memory usage in MB
-    float memory_percent;       // RAM usage as percent of total RAM
-
-    int thread_count;           // Number of threads
+    enum SortField { PID, NAME, USER, CPU, MEMORY, THREADS };
+    static void sortProcesses(std::vector<ProcessInfo> &processes, SortField field, bool ascending);
 };
+
+

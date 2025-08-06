@@ -9,6 +9,6 @@ class ProcessUI {
         ~ProcessUI();
         void render();
     private:
-        std::shared_ptr<std::vector<ProcessInfo>> shared_ptr_var;
-        ProcessUpdater* process_updater = nullptr;
+        std::unique_ptr<ProcessUpdater> m_ProcessUpdater;
+        std::vector<ProcessInfo> m_DisplayedProcesses;
 };

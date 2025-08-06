@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <map>
 #include <memory>
 #include <thread>
 #include <vector>
@@ -10,22 +11,24 @@
 
 class ProcessUpdater {
 public:
-    ProcessUpdater(std::shared_ptr<std::vector<ProcessInfo>> *shared_ptr_var);
-
+    ProcessUpdater();
     ~ProcessUpdater();
+
     void start();
     void stop();
-    void set_update_interval(float seconds);
+
+    std::vector<ProcessInfo> get_processes();
 
 private:
     void update_loop();
     std::shared_ptr<std::vector<ProcessInfo>> *shared_ptr_var;
 
-    int counter = 0;
+    std::atomic<bool> m_IsRunning{false};
+    std::thread m_WorkerThread;
+    std::mutex m_DataMutex;
 
-    std::thread worker_thread;
-    std::atomic<bool> running{ false };
-    std::condition_variable cv;
-    std::mutex cv_mutex;
-    float update_interval_seconds = 5.0f;
+    std::vector<ProcessInfo> m_Processes;
+
+    std::map<int, unsigned long long> m_PrevProcessCpuTimes;
+    unsigned long long m_PrevTotalSystemCpuTime = 0;
 };

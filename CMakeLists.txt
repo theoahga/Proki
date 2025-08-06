@@ -17,7 +17,8 @@ add_executable(proki
         src/ui/process/ProcessUI.cpp
         src/ui/process/ProcessUI.h
         src/service/ProcessUpdater.cpp
-        src/service/ProcessUpdater.h)
+        src/service/ProcessUpdater.h
+        src/service/ProcessInfo.cpp)
 
 target_sources(proki PRIVATE
         src/main.cpp src/app/App.cpp

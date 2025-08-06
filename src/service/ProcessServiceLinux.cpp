@@ -11,10 +11,8 @@
 #include <vector>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <unistd.h>
 #include <thread>
 #include <chrono>
-#include <optional>
 #include <algorithm>
 
 static std::string get_user_from_uid(uid_t uid) {
@@ -22,90 +20,45 @@ static std::string get_user_from_uid(uid_t uid) {
     return pw ? pw->pw_name : "unknown";
 }
 
-static long get_total_memory_kb() {
-    std::ifstream meminfo("/proc/meminfo");
-    std::string line;
-    while (std::getline(meminfo, line)) {
-        if (line.rfind("MemTotal:", 0) == 0) {
-            std::istringstream iss(line.substr(9));
-            long mem_kb;
-            iss >> mem_kb;
-            return mem_kb;
-        }
-    }
-    return 0;
-}
-
-static long long get_total_cpu_time() {
+unsigned long long ProcessService::get_total_system_cpu_time() {
     std::ifstream file("/proc/stat");
     std::string line;
     std::getline(file, line);
-    std::istringstream iss(line.substr(5)); // Skip "cpu  "
-    long long total = 0, val;
-    while (iss >> val)
-        total += val;
+    std::istringstream iss(line.substr(5));
+    unsigned long long total = 0, val;
+    while (iss >> val) total += val;
     return total;
 }
 
-static long long get_process_cpu_time(int pid) {
+unsigned long long ProcessService::get_process_cpu_time(int pid) {
     std::ifstream file("/proc/" + std::to_string(pid) + "/stat");
     if (!file.is_open()) return 0;
     std::string token;
     for (int i = 0; i < 13; ++i) file >> token;
-    long utime, stime;
+    unsigned long long utime, stime;
     file >> utime >> stime;
-    return static_cast<long long>(utime + stime);
+    return utime + stime;
 }
 
-static std::string read_cmdline(int pid) {
-    std::ifstream cmdfile("/proc/" + std::to_string(pid) + "/cmdline");
-    std::string cmdline;
-    std::getline(cmdfile, cmdline, '\0');
-    std::replace(cmdline.begin(), cmdline.end(), '\0', ' ');
-    return cmdline;
-}
-
-static ProcessInfo parse_process(int pid, long total_mem_kb) {
-    ProcessInfo info = {};
-    info.pid = pid;
-
-    std::ifstream status("/proc/" + std::to_string(pid) + "/status");
-    if (!status.is_open()) throw std::runtime_error("status not readable");
-
+unsigned long get_total_memory_kb() {
+    std::ifstream meminfo("/proc/meminfo");
     std::string line;
-    while (std::getline(status, line)) {
-        if (line.rfind("Name:", 0) == 0)
-            info.name = line.substr(6);
-        else if (line.rfind("Uid:", 0) == 0)
-            info.user = get_user_from_uid(std::stoi(line.substr(5)));
-        else if (line.rfind("State:", 0) == 0)
-            info.state = line.substr(7);
-        else if (line.rfind("PPid:", 0) == 0)
-            info.ppid = std::stoi(line.substr(6));
-        else if (line.rfind("Threads:", 0) == 0)
-            info.thread_count = std::stoi(line.substr(9));
-        else if (line.rfind("VmRSS:", 0) == 0)
-            info.memory_usage = std::stof(line.substr(7)) / 1024.0f; // kB to MB
+    while (std::getline(meminfo, line)) {
+        if (line.find("MemTotal:") == 0) {
+            std::istringstream iss(line);
+            std::string label, unit;
+            unsigned long mem_kb;
+            iss >> label >> mem_kb >> unit; // label = "MemTotal:", unit = "kB"
+            return mem_kb;
+        }
     }
-
-    info.memory_percent = (total_mem_kb > 0)
-        ? (info.memory_usage * 1024.0f / total_mem_kb) * 100.0f
-        : 0.0f;
-
-    info.cmdline = read_cmdline(pid);
-
-    int cpu_cores = std::max(1L, sysconf(_SC_NPROCESSORS_ONLN));
-    info.cpu_usage = 0.0f;
-
-    return info;
+    return 0; // error case
 }
 
 std::vector<ProcessInfo> ProcessService::list_all_processes() {
     std::vector<ProcessInfo> processes;
     DIR *dir = opendir("/proc");
     if (!dir) return processes;
-
-    long total_mem_kb = get_total_memory_kb();
 
     struct dirent *entry;
     while ((entry = readdir(dir))) {
@@ -114,7 +67,26 @@ std::vector<ProcessInfo> ProcessService::list_all_processes() {
             if (std::all_of(name, name + std::strlen(name), ::isdigit)) {
                 int pid = std::atoi(name);
                 try {
-                    processes.push_back(parse_process(pid, total_mem_kb));
+                    ProcessInfo info = {};
+                    info.pid = pid;
+
+                    std::ifstream status("/proc/" + std::to_string(pid) + "/status");
+                    if (!status.is_open()) continue;
+
+                    std::string line;
+                    while (std::getline(status, line)) {
+                        if (line.rfind("Name:", 0) == 0)
+                            info.name = line.substr(6);
+                        else if (line.rfind("Uid:", 0) == 0)
+                            info.user = get_user_from_uid(std::stoi(line.substr(5)));
+                        else if (line.rfind("State:", 0) == 0)
+                            info.state = line.substr(7);
+                        else if (line.rfind("Threads:", 0) == 0)
+                            info.thread_count = std::stoi(line.substr(9));
+                        else if (line.rfind("VmRSS:", 0) == 0)
+                            info.memory_usage = std::stof(line.substr(7));
+                    }
+                    processes.push_back(info);
                 } catch (...) {
                     // Ignore processes we can't read
                 }
@@ -122,15 +94,13 @@ std::vector<ProcessInfo> ProcessService::list_all_processes() {
         }
     }
     closedir(dir);
-    return processes;
-}
 
-std::optional<ProcessInfo> ProcessService::get_process_info(int pid) {
-    try {
-        return parse_process(pid, get_total_memory_kb());
-    } catch (...) {
-        return std::nullopt;
+    auto total_memory_kb = get_total_memory_kb();
+    for (auto& p : processes) {
+        p.memory_percent = 100.0f * p.memory_usage / total_memory_kb;
     }
+
+    return processes;
 }
 
 #endif

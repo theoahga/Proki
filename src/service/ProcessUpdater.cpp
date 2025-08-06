@@ -5,8 +5,12 @@
 
 #include "ProcessService.h"
 
-ProcessUpdater::ProcessUpdater(std::shared_ptr<std::vector<ProcessInfo>> *shared_ptr_var)
-    : shared_ptr_var(shared_ptr_var) {
+ProcessUpdater::ProcessUpdater(): shared_ptr_var(nullptr) {
+    m_PrevTotalSystemCpuTime = ProcessService::get_total_system_cpu_time();
+    auto processes = ProcessService::list_all_processes();
+    for (const auto &p: processes) {
+        m_PrevProcessCpuTimes[p.pid] = ProcessService::get_process_cpu_time(p.pid);
+    }
 }
 
 ProcessUpdater::~ProcessUpdater() {
@@ -14,39 +18,56 @@ ProcessUpdater::~ProcessUpdater() {
 }
 
 void ProcessUpdater::start() {
-    if (running) return;
-    running = true;
-    worker_thread = std::thread(&ProcessUpdater::update_loop, this);
+    if (m_IsRunning) return;
+    m_IsRunning = true;
+    m_WorkerThread = std::thread(&ProcessUpdater::update_loop, this);
 }
 
 void ProcessUpdater::stop() {
-    if (!running) return;
-    running = false;
-    cv.notify_all();
-    if (worker_thread.joinable())
-        worker_thread.join();
-}
-
-void ProcessUpdater::set_update_interval(float seconds) {
-    update_interval_seconds = seconds;
+    if (!m_IsRunning) return;
+    m_IsRunning = false;
+    if (m_WorkerThread.joinable())
+        m_WorkerThread.join();
 }
 
 void ProcessUpdater::update_loop() {
-    while (running) {
-        auto processes = ProcessService::list_all_processes();
+    while (m_IsRunning) {
+        // Wait a second
+        std::this_thread::sleep_for(std::chrono::seconds(1));
 
-        std::sort(processes.begin(), processes.end(), [](const ProcessInfo& a, const ProcessInfo& b) {
-            float score_a = a.cpu_usage * 0.7f + a.memory_percent * 0.3f;
-            float score_b = b.cpu_usage * 0.7f + b.memory_percent * 0.3f;
-            return score_a > score_b;
-        });
+        unsigned long long currentTotalSystemTime = ProcessService::get_total_system_cpu_time();
+        auto newProcesses = ProcessService::list_all_processes();
+        std::map<int, unsigned long long> currentProcessCpuTimes;
 
-        auto updated_process_list = std::make_shared<std::vector<ProcessInfo>>(processes);
+        unsigned long long systemTimeDiff = currentTotalSystemTime - m_PrevTotalSystemCpuTime;
 
-        std::atomic_store(shared_ptr_var, updated_process_list);
+        for (auto& p : newProcesses) {
+            unsigned long long currentProcessTime = ProcessService::get_process_cpu_time(p.pid);
+            currentProcessCpuTimes[p.pid] = currentProcessTime;
 
-        counter++;
-        std::unique_lock<std::mutex> lock(cv_mutex);
-        cv.wait_for(lock, std::chrono::duration<float>(update_interval_seconds), [this]() { return !running.load(); });
+            auto it = m_PrevProcessCpuTimes.find(p.pid);
+            if (it != m_PrevProcessCpuTimes.end() && systemTimeDiff > 0) {
+                unsigned long long processTimeDiff = currentProcessTime - it->second;
+                p.cpu_usage = 100.0f * static_cast<float>(processTimeDiff) / static_cast<float>(systemTimeDiff);
+            }
+        }
+
+        ProcessInfo::sortProcesses(newProcesses, ProcessInfo::MEMORY, false);
+
+        // Update the shared m_Processes std::vector
+        {
+            std::lock_guard<std::mutex> lock(m_DataMutex);
+            m_Processes = std::move(newProcesses);
+        }
+
+        // Save current values for the next iteration
+        m_PrevTotalSystemCpuTime = currentTotalSystemTime;
+        m_PrevProcessCpuTimes = std::move(currentProcessCpuTimes);
+
     }
+}
+
+std::vector<ProcessInfo> ProcessUpdater::get_processes() {
+    std::lock_guard<std::mutex> lock(m_DataMutex);
+    return m_Processes;
 }
