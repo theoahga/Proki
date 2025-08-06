@@ -15,8 +15,8 @@ void ProcessInfo::sortProcesses(std::vector<ProcessInfo> &processes, ProcessInfo
                 return ascending ? a.cpu_usage<b.cpu_usage : a.cpu_usage> b.cpu_usage;
             case ProcessInfo::MEMORY:
                 return ascending ? a.memory_usage<b.memory_usage : a.memory_usage> b.memory_usage;
-            case ProcessInfo::THREADS:
-                return ascending ? a.thread_count<b.thread_count : a.thread_count> b.thread_count;
+            case ProcessInfo::COMMAND:
+                return ascending ? a.command <b.command : a.command> b.command;
             default:
                 return true;
         }

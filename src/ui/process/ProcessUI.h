@@ -1,7 +1,16 @@
 #pragma once
 
+#include <imgui.h>
+
 #include "service/ProcessUpdater.h"
 
+
+struct Column {
+    char *name;
+    float width;
+    ImGuiTableColumnFlags flags;
+    ProcessInfo::SortField sort_field;
+};
 
 class ProcessUI {
     public:

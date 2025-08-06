@@ -55,6 +55,16 @@ unsigned long get_total_memory_kb() {
     return 0; // error case
 }
 
+std::string get_cmd_line(int pid) {
+    std::ifstream file("/proc/" + std::to_string(pid) + "/cmdline", std::ios::binary);
+    if (!file.is_open()) {
+        return "";
+    }
+    std::string line((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    std::replace(line.begin(), line.end(), '\0', ' ');
+    return line;
+}
+
 std::vector<ProcessInfo> ProcessService::list_all_processes() {
     std::vector<ProcessInfo> processes;
     DIR *dir = opendir("/proc");
@@ -63,7 +73,7 @@ std::vector<ProcessInfo> ProcessService::list_all_processes() {
     struct dirent *entry;
     while ((entry = readdir(dir))) {
         if (entry->d_type == DT_DIR) {
-            const char* name = entry->d_name;
+            const char *name = entry->d_name;
             if (std::all_of(name, name + std::strlen(name), ::isdigit)) {
                 int pid = std::atoi(name);
                 try {
@@ -86,6 +96,8 @@ std::vector<ProcessInfo> ProcessService::list_all_processes() {
                         else if (line.rfind("VmRSS:", 0) == 0)
                             info.memory_usage = std::stof(line.substr(7));
                     }
+
+                    info.command = get_cmd_line(pid);
                     processes.push_back(info);
                 } catch (...) {
                     // Ignore processes we can't read
@@ -96,7 +108,7 @@ std::vector<ProcessInfo> ProcessService::list_all_processes() {
     closedir(dir);
 
     auto total_memory_kb = get_total_memory_kb();
-    for (auto& p : processes) {
+    for (auto &p: processes) {
         p.memory_percent = 100.0f * p.memory_usage / total_memory_kb;
     }
 

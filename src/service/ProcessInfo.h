@@ -14,7 +14,7 @@ struct ProcessInfo {
     float memory_percent = 0.0f;
     int thread_count = 0;
 
-    enum SortField { PID, NAME, USER, CPU, MEMORY, THREADS };
+    enum SortField { PID, NAME, USER, CPU, MEMORY, COMMAND };
     static void sortProcesses(std::vector<ProcessInfo> &processes, SortField field, bool ascending);
 };
 

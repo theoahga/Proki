@@ -13,9 +13,9 @@ UI::~UI() {
 
 void UI::init() {
     state->tabs.push_back({
-        "Tab1",
+        "Processes",
         true,
-        [](UiState& state) {
+        [](UiState &state) {
             state.process_ui->render();
         }
     });
@@ -23,7 +23,7 @@ void UI::init() {
     state->tabs.push_back({
         "Tab2",
         true,
-        [](UiState& state) {
+        [](UiState &state) {
             ImGui::Text("Content of Tab2");
         }
     });
@@ -34,8 +34,8 @@ void UI::render() {
 }
 
 void UI::renderMainWindow() {
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
-                             ImGuiWindowFlags_NoSavedSettings;
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize
+                             | ImGuiWindowFlags_NoSavedSettings;
     const ImGuiViewport *viewport = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(viewport->WorkPos);
     ImGui::SetNextWindowSize(viewport->WorkSize);
